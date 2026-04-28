@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Műtő zajszint szimulátor — Fogászati ultrahang</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F5F1E6;
+    --paper-2: #EDE8D9;
+    --paper-3: #E3DDCB;
+    --ink: #1A1A1A;
+    --ink-2: #555049;
+    --ink-3: #8A847A;
+    --hair: #C9C1AF;
+    --hair-soft: #D9D2C0;
+    --aud: #0F6E56;
+    --aud-bg: #DDEDE3;
+    --ult: #C14820;
+    --ult-bg: #F4E2D2;
+    --danger: #922020;
+    --display: "Instrument Serif", ui-serif, Georgia, serif;
+    --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); }
+  body {
+    font-family: var(--sans);
+    font-weight: 400;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    background-image:
+      radial-gradient(circle at 15% 12%, rgba(201,193,175,0.25) 0%, transparent 40%),
+      radial-gradient(circle at 85% 88%, rgba(201,193,175,0.25) 0%, transparent 42%);
+    min-height: 100vh;
+  }
+
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 48px; }
+
+  /* ──────── topbar ──────── */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 0 18px;
+    border-bottom: 1px solid var(--hair);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .topbar .left { display: flex; gap: 28px; align-items: center; }
+  .topbar .mark {
+    display: inline-flex; align-items: center; gap: 10px;
+    color: var(--ink);
+  }
+  .topbar .mark .emblem {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--ink);
+    box-shadow: inset 0 0 0 2px var(--paper), 0 0 0 1px var(--ink);
+  }
+  .topbar .sep::before { content: "·"; color: var(--hair); margin-right: 28px; margin-left: -14px; }
+  .topbar .right { display: flex; gap: 20px; }
+  .topbar .dot-ok { display: inline-flex; align-items: center; gap: 6px; }
+  .topbar .dot-ok::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--aud); }
+
+  /* ──────── hero ──────── */
+  .hero {
+    padding: 84px 0 54px;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 64px;
+    align-items: end;
+    border-bottom: 1px solid var(--hair);
+  }
+  .hero h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(56px, 8vw, 112px);
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--ult);
+  }
+  .hero .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 22px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .hero .tag::before {
+    content: ""; width: 28px; height: 1px; background: var(--ink-3);
+  }
+  .hero .lede {
+    font-size: 15px;
+    color: var(--ink-2);
+    max-width: 320px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+  .hero .lede strong { color: var(--ink); font-weight: 500; }
+  .hero-right {
+    padding-bottom: 12px;
+    display: flex; flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 12px;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--paper);
+    background: var(--ink);
+    border: none;
+    padding: 14px 22px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    letter-spacing: -0.01em;
+  }
+  .btn:hover { background: var(--ult); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0) scale(0.98); }
+  .btn svg { transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .btn:hover svg { transform: rotate(-60deg); }
+
+  /* ──────── meta row ──────── */
+  .meta {
+    display: flex; justify-content: space-between;
+    padding: 22px 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    border-bottom: 1px solid var(--hair);
+  }
+  .meta span strong {
+    font-weight: 500;
+    color: var(--ink);
+    margin-left: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ──────── stats ──────── */
+  .stats {
+    display: grid;
+    grid-template-columns: 1.2fr 1.2fr 1fr;
+    border-bottom: 1px solid var(--hair);
+  }
+  .stat {
+    padding: 40px 36px;
+    border-right: 1px solid var(--hair);
+    position: relative;
+  }
+  .stat:last-child { border-right: none; }
+  .stat:first-child { padding-left: 0; }
+  .stat .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 20px;
+  }
+  .stat .label::before {
+    content: "";
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .stat.aud .label::before { background: var(--aud); }
+  .stat.ult .label::before { background: var(--ult); }
+  .stat.exp .label::before { background: var(--ink); }
+  .stat .value {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 88px;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .unit {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--ink-3);
+    margin-left: 6px;
+    letter-spacing: 0.02em;
+  }
+  .stat .foot {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    letter-spacing: 0.04em;
+  }
+  .stat .foot .tick { color: var(--aud); font-weight: 500; }
+  .stat .foot .warn { color: var(--ult); font-weight: 500; }
+  .stat .foot .bad { color: var(--danger); font-weight: 500; }
+
+  /* ──────── room panel ──────── */
+  .room-panel {
+    padding: 56px 0;
+    border-bottom: 1px solid var(--hair);
+  }
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 28px;
+  }
+  .section-head h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-style: italic;
+    font-size: 34px;
+    letter-spacing: -0.01em;
+  }
+  .section-head .num {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .room-card {
+    background: var(--paper-2);
+    border-radius: 4px;
+    padding: 28px;
+    position: relative;
+  }
+  .room-card::before {
+    content: "";
+    position: absolute; inset: 0;
+    border: 1px solid var(--hair);
+    border-radius: 4px;
+    pointer-events: none;
+  }
+  .room-svg { width: 100%; height: auto; display: block; }
+
+  .legend {
+    display: flex; gap: 28px; flex-wrap: wrap;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px dashed var(--hair);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--ink-2);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .legend .swatch {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1px solid var(--hair);
+  }
+  .legend .swatch.aud { background: var(--aud-bg); border-color: var(--aud); }
+  .legend .swatch.ult { background: var(--ult-bg); border-color: var(--ult); }
+  .legend .swatch.lst {
+    background: var(--paper);
+    border: 1.5px solid var(--ink);
+    position: relative;
+  }
+  .legend .swatch.lst::after {
+    content: ""; position: absolute; inset: 3px;
+    background: var(--ink); border-radius: 50%;
+  }
+  .legend .heat {
+    width: 56px; height: 10px;
+    background: linear-gradient(to right, transparent, #E8C578, #C14820, #922020);
+    border: 1px solid var(--hair);
+  }
+
+  /* ──────── sources ──────── */
+  .sources {
+    padding: 56px 0 36px;
+    border-bottom: 1px solid var(--hair);
+  }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-family: var(--sans);
+    font-size: 14px;
+  }
+  thead th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 400;
+    color: var(--ink-3);
+    text-align: left;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--ink);
+  }
+  thead th.r { text-align: right; }
+  tbody td {
+    padding: 18px 14px;
+    border-bottom: 1px solid var(--hair-soft);
+    vertical-align: top;
+  }
+  tbody td.r { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  tbody tr:hover td { background: var(--paper-2); }
+  .dev-row .idx {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%;
+    font-family: var(--mono);
+    font-size: 11px; font-weight: 500;
+    margin-right: 12px;
+    letter-spacing: 0;
+  }
+  .dev-row .idx.aud { background: var(--aud-bg); color: var(--aud); border: 1px solid var(--aud); }
+  .dev-row .idx.ult { background: var(--ult-bg); color: var(--ult); border: 1px solid var(--ult); }
+  .dev-row .name { font-weight: 500; }
+  .dev-row .mode {
+    display: block;
+    margin-top: 4px; margin-left: 38px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    letter-spacing: 0.02em;
+  }
+  .dev-row .lpred { font-weight: 500; color: var(--ink); }
+  .dev-row .delta {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px; color: var(--ink-3);
+    margin-top: 2px;
+    letter-spacing: 0.02em;
+  }
+
+  /* ──────── footer ──────── */
+  .foot {
+    padding: 36px 0 64px;
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr;
+    gap: 48px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--ink-3);
+    line-height: 1.7;
+  }
+  .foot h3 {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-bottom: 12px;
+  }
+  .foot code {
+    color: var(--ink);
+    font-family: var(--mono);
+    background: var(--paper-2);
+    padding: 1px 6px;
+    border-radius: 2px;
+  }
+
+  /* ──────── regen animation ──────── */
+  .regenerating .room-card { opacity: 0.55; transition: opacity 0.3s; }
+  .regenerating .stat .value { opacity: 0.4; transition: opacity 0.25s; }
+
+  .fade-in {
+    animation: fadeIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ──────── export menu ──────── */
+  .actions {
+    display: flex; flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .export-wrap { position: relative; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--ink);
+    padding: 13px 21px;
+  }
+  .btn-ghost:hover {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .btn-ghost:hover svg { transform: rotate(0deg) translateY(2px); }
+
+  .export-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    min-width: 280px;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    border-radius: 6px;
+    padding: 8px;
+    z-index: 50;
+    box-shadow: 0 12px 32px rgba(26, 26, 26, 0.10), 0 2px 6px rgba(26, 26, 26, 0.04);
+    opacity: 0; pointer-events: none;
+    transform: translateY(-4px);
+    transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .export-menu.open {
+    opacity: 1; pointer-events: auto;
+    transform: translateY(0);
+  }
+  .export-menu .head {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    padding: 8px 14px 10px;
+    border-bottom: 1px dashed var(--hair);
+    margin-bottom: 4px;
+  }
+  .export-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 11px 14px;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease;
+    letter-spacing: -0.005em;
+  }
+  .export-menu button:hover { background: var(--paper-2); }
+  .export-menu button .ext {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--ink-3);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-right: 10px;
+    padding: 2px 6px;
+    background: var(--paper-3);
+    border-radius: 2px;
+    font-weight: 400;
+  }
+  .export-menu button:hover .ext { background: var(--paper); }
+  .export-menu button .desc {
+    display: block;
+    margin-top: 3px;
+    margin-left: 0;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-3);
+    letter-spacing: 0.02em;
+    font-weight: 400;
+    text-transform: none;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 32px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 100;
+    display: inline-flex; align-items: center; gap: 10px;
+    box-shadow: 0 8px 24px rgba(26, 26, 26, 0.18);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .toast::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--aud);
+  }
+
+  /* ──────── responsive ──────── */
+  @media (max-width: 900px) {
+    .wrap { padding: 0 24px; }
+    .hero { grid-template-columns: 1fr; gap: 32px; padding: 56px 0 40px; }
+    .hero h1 { font-size: 64px; }
+    .stats { grid-template-columns: 1fr; }
+    .stat { border-right: none; border-bottom: 1px solid var(--hair); padding: 28px 0; }
+    .stat:first-child { padding-top: 0; }
+    .stat:last-child { border-bottom: none; padding-bottom: 0; }
+    .stat .value { font-size: 64px; }
+    .foot { grid-template-columns: 1fr; gap: 28px; }
+    .topbar { flex-wrap: wrap; gap: 8px; }
+    .topbar .right { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="left">
+      <span class="mark"><span class="emblem"></span>DENTAL · ACOUSTIC · LAB</span>
+      <span class="sep">v1.0 / 2026</span>
+    </div>
+    <div class="right">
+      <span>ISO 9613-1</span>
+      <span>NIOSH 3 dB</span>
+      <span class="dot-ok">MODELL AKTÍV</span>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-left">
+      <div class="tag">Fogászati ultrahang · Random elrendezés</div>
+      <h1>Műtő-<br>zajszint<br><em>szimulátor.</em></h1>
+    </div>
+    <div class="hero-right">
+      <p class="lede">
+        Random méretű műtőben <strong>random eszközkészlet</strong>, random üzemmódokkal. A hallható és ultrahang szinteket a hallgató pozíciójánál energikusan összegzi — valós irodalmi mérések alapján.
+      </p>
+      <div class="actions">
+        <button class="btn" id="regen" aria-label="Új szimuláció generálása">
+          Új szimuláció
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+        </button>
+        <div class="export-wrap">
+          <button class="btn btn-ghost" id="export-btn" aria-haspopup="true" aria-expanded="false" aria-controls="export-menu">
+            Exportálás
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+          <div class="export-menu" id="export-menu" role="menu">
+            <div class="head">Aktuális állapot mentése</div>
+            <button data-format="json" role="menuitem">
+              <span class="ext">JSON</span>Teljes szimulációs állapot
+              <span class="desc">Szoba, hallgató, források, számított dB értékek</span>
+            </button>
+            <button data-format="csv" role="menuitem">
+              <span class="ext">CSV</span>Eszközök táblázata
+              <span class="desc">Excel/Sheets · UTF-8 BOM · ékezetekkel</span>
+            </button>
+            <button data-format="svg" role="menuitem">
+              <span class="ext">SVG</span>Térkép · vektoros
+              <span class="desc">Skálázható, prezentációhoz, jelentéshez</span>
+            </button>
+            <button data-format="png" role="menuitem">
+              <span class="ext">PNG</span>Térkép · raszteres
+              <span class="desc">2× felbontás · világos paper háttérrel</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- META -->
+  <div class="meta">
+    <span>Szoba <strong id="m-room">— × — m</strong></span>
+    <span>Alapterület <strong id="m-area">— m²</strong></span>
+    <span>Aktív források <strong id="m-count">—</strong></span>
+    <span>Hallgató <strong id="m-listener">(—, —)</strong></span>
+  </div>
+
+  <!-- STATS -->
+  <section class="stats">
+    <div class="stat aud">
+      <div class="label">Hallható zaj · összegzett</div>
+      <div><span class="value" id="s-aud">—</span><span class="unit">dB</span></div>
+      <div class="foot" id="s-aud-foot">—</div>
+    </div>
+    <div class="stat ult">
+      <div class="label">Ultrahang · külön</div>
+      <div><span class="value" id="s-ult">—</span><span class="unit">dB</span></div>
+      <div class="foot" id="s-ult-foot">25 kHz sáv + 46.5 kHz csúcs</div>
+    </div>
+    <div class="stat exp">
+      <div class="label">Max. expozíció</div>
+      <div><span class="value" id="s-hrs">—</span><span class="unit">óra</span></div>
+      <div class="foot">NIOSH 3 dB csere · L=85 dB</div>
+    </div>
+  </section>
+
+  <!-- ROOM -->
+  <section class="room-panel">
+    <div class="section-head">
+      <h2>Elrendezés</h2>
+      <span class="num">01 — Felülnézet, zajszint-térkép</span>
+    </div>
+    <div class="room-card" id="room-card">
+      <div id="svg-host"></div>
+    </div>
+    <div class="legend">
+      <span><span class="swatch aud"></span>Hallható forrás</span>
+      <span><span class="swatch ult"></span>Ultrahangos forrás</span>
+      <span><span class="swatch lst"></span>Hallgató / fogorvos</span>
+      <span><span class="heat"></span>Hallható dB szint a szoba pontjain</span>
+    </div>
+  </section>
+
+  <!-- SOURCES -->
+  <section class="sources">
+    <div class="section-head">
+      <h2>Források</h2>
+      <span class="num">02 — Eszközönkénti bontás</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Eszköz és üzemmód</th>
+          <th class="r">L_ref</th>
+          <th class="r">d_ref</th>
+          <th class="r">Távolság</th>
+          <th class="r">L_pred</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="foot">
+    <div>
+      <h3>Modell</h3>
+      Első rendű szabadtéri közelítés. Távolság-korrekció: <code>L = L_ref + 20·log₁₀(d_ref/d)</code>. Légköri elnyelés α = 0 (hallható sávra első közelítés).
+    </div>
+    <div>
+      <h3>Összegzés</h3>
+      Független források energikus kombinációja: <code>L_tot = 10·log₁₀(Σ 10^(Lᵢ/10))</code>. Hallható és ultrahang sávok külön tartva (nem összehasonlíthatók).
+    </div>
+    <div>
+      <h3>Expozíció</h3>
+      NIOSH 3 dB csere: <code>T = 8·2^((85−L)/3)</code>. Csak a hallható összeggre érvényes.
+    </div>
+  </footer>
+
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite">Mentve</div>
+
+<script>
+(function(){
+  // ──────── AKTUÁLIS ÁLLAPOT (export-hoz) ────────
+  let CURRENT_STATE = null;
+  let CURRENT_RESULT = null;
+
+  // ──────── FORRÁS ADATOK (Source_Data sheet alapján) ────────
+  const DATA = {
+    "Ultrahangos depurátor": [
+      { m: "turned_on_only",              t: "audible_dBA", L: 51.7, d: 0.15 },
+      { m: "turned_on_only",              t: "audible_dB",  L: 63.0, d: 0.30 },
+      { m: "operating + low suction",     t: "audible_dB",  L: 74.2, d: 0.30 },
+      { m: "operating + high suction",    t: "audible_dB",  L: 81.6, d: 0.30 },
+      { m: "1/3 octave band @ 25 kHz",    t: "ultrasound_band_dB", L: 107, d: 1.0 }
+    ],
+    "Nagysebességű kézidarab": [
+      { m: "turned_on_only",                 t: "audible_dB", L: 63.35, d: 0.30 },
+      { m: "tooth_cutting",                  t: "audible_dB", L: 75.50, d: 0.30 },
+      { m: "tooth_cutting + low suction",    t: "audible_dB", L: 77.15, d: 0.30 },
+      { m: "tooth_cutting + high suction",   t: "audible_dB", L: 85.50, d: 0.30 }
+    ],
+    "Nagysebességű turbina": [
+      { m: "average_clinical_use", t: "audible_dBA", L: 75.44, d: 0.15 }
+    ],
+    "Kissebességű kézidarab": [
+      { m: "turned_on_only",               t: "audible_dB", L: 69.20, d: 0.30 },
+      { m: "tooth_cutting + high suction", t: "audible_dB", L: 83.80, d: 0.30 }
+    ],
+    "Kissebességű könyökdarab": [
+      { m: "average_clinical_use", t: "audible_dBA", L: 68.31, d: 0.15 }
+    ],
+    "Mikromotoros fúró": [
+      { m: "turned_on_only",  t: "audible_dB",  L: 62.60, d: 0.30 },
+      { m: "cutting_acrylic", t: "audible_dB",  L: 78.90, d: 0.30 },
+      { m: "cutting_acrylic", t: "audible_dBA", L: 92.20, d: 0.15 }
+    ],
+    "Sebészeti szívó": [
+      { m: "running_free",    t: "audible_dB", L: 70.75, d: 0.30 },
+      { m: "touching_mucosa", t: "audible_dB", L: 78.00, d: 0.30 }
+    ],
+    "Fogászati turbina (ultrahang)": [
+      { m: "spectral_amplitude @ 46.5 kHz", t: "ultrasound_peak_dBSPL", L: 115, d: 1.0 }
+    ]
+  };
+
+  const SHORT = {
+    "Ultrahangos depurátor":          "Depurátor",
+    "Nagysebességű kézidarab":        "Fúró ·N",
+    "Nagysebességű turbina":          "Turbina ·N",
+    "Kissebességű kézidarab":         "Fúró ·K",
+    "Kissebességű könyökdarab":       "Könyök",
+    "Mikromotoros fúró":              "Mikromot.",
+    "Sebészeti szívó":                "Szívó",
+    "Fogászati turbina (ultrahang)":  "Ultr.-turb."
+  };
+
+  const rand = (a,b) => a + Math.random()*(b-a);
+  const pick = a => a[Math.floor(Math.random()*a.length)];
+
+  // ──────── SZIMULÁCIÓ GENERÁLÁSA ────────
+  function generate() {
+    const W = rand(3, 10);
+    const H = rand(3, 10);
+    const names = Object.keys(DATA);
+    const n = 4 + Math.floor(Math.random()*5); // 4–8 eszköz
+    const chosen = names.slice().sort(()=>Math.random()-0.5).slice(0, n);
+
+    const MIN_SEP = 0.5, MARGIN = 0.3;
+    const pts = [];
+    pts.push({ x: rand(MARGIN, W-MARGIN), y: rand(MARGIN, H-MARGIN), listener: true });
+
+    for (const name of chosen) {
+      for (let i=0; i<600; i++) {
+        const x = rand(MARGIN, W-MARGIN);
+        const y = rand(MARGIN, H-MARGIN);
+        let ok = true;
+        for (const p of pts) {
+          if (Math.hypot(p.x-x, p.y-y) < MIN_SEP) { ok = false; break; }
+        }
+        if (ok) {
+          const dev = pick(DATA[name]);
+          pts.push({ x, y, listener: false, name, dev });
+          break;
+        }
+      }
+    }
+    return { W, H, pts };
+  }
+
+  // ──────── KALKULÁCIÓ ────────
+  function compute(state) {
+    const listener = state.pts.find(p => p.listener);
+    const rows = [];
+    const audLs = [], ultLs = [];
+    for (const p of state.pts) {
+      if (p.listener) continue;
+      const d = Math.max(0.05, Math.hypot(p.x - listener.x, p.y - listener.y));
+      const Lpred = p.dev.L + 20 * Math.log10(p.dev.d / d);
+      const isU = p.dev.t.startsWith("ultrasound");
+      if (isU) ultLs.push(Lpred); else audLs.push(Lpred);
+      rows.push({ ...p, d, Lpred, isU });
+    }
+    const sum = a => a.length ? 10 * Math.log10(a.reduce((s,L)=>s + Math.pow(10, L/10), 0)) : null;
+    const Laud = sum(audLs), Lult = sum(ultLs);
+    const hrs = Laud != null ? 8 * Math.pow(2, (85 - Laud) / 3) : null;
+    return { rows, Laud, Lult, hrs, listener };
+  }
+
+  // ──────── ZAJSZINT MEZŐ MINDEN PONTRA (heatmap) ────────
+  function fieldAt(x, y, rows) {
+    // csak a hallható forrásokból számolunk térképet
+    let e = 0;
+    for (const r of rows) {
+      if (r.isU) continue;
+      const d = Math.max(0.25, Math.hypot(x - r.x, y - r.y));
+      const Lp = r.dev.L + 20 * Math.log10(r.dev.d / d);
+      e += Math.pow(10, Lp / 10);
+    }
+    return e > 0 ? 10 * Math.log10(e) : 0;
+  }
+
+  function heatColor(L, minL, maxL) {
+    // 65 dB alatt halvány, 95+ dB intenzív
+    const t = Math.max(0, Math.min(1, (L - 65) / 30));
+    // multi-stop interpoláció: paper → amber → coral → danger
+    const stops = [
+      [0.0, [245, 241, 230, 0]],
+      [0.25,[245, 220, 165, 0.35]],
+      [0.55,[232, 165, 100, 0.55]],
+      [0.80,[193, 72, 32, 0.70]],
+      [1.0, [146, 32, 32, 0.85]]
+    ];
+    for (let i=0; i<stops.length-1; i++) {
+      const [t1, c1] = stops[i], [t2, c2] = stops[i+1];
+      if (t <= t2) {
+        const k = (t - t1) / (t2 - t1);
+        const c = c1.map((v, j) => v + (c2[j] - v) * k);
+        return `rgba(${c[0].toFixed(0)},${c[1].toFixed(0)},${c[2].toFixed(0)},${c[3].toFixed(3)})`;
+      }
+    }
+    return `rgba(${stops.at(-1)[1].join(",")})`;
+  }
+
+  // ──────── SVG RENDERELÉS ────────
+  function renderSVG(state, res) {
+    const { W, H, pts } = state;
+    const PAD = 40;
+    const maxW = 900, maxH = 520;
+    const s = Math.min(maxW / W, maxH / H);
+    const vw = W * s, vh = H * s;
+
+    const devs = pts.filter(p => !p.listener);
+    const lx = PAD + res.listener.x * s, ly = PAD + res.listener.y * s;
+
+    let svg = `<svg class="room-svg" viewBox="0 0 ${vw + PAD*2} ${vh + PAD*2}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Műtő felülnézeti elrendezése és zajszint térkép">`;
+
+    // ── heatmap rács ──
+    const gx = 44, gy = Math.max(22, Math.round(gx * H / W));
+    const cellW = vw / gx, cellH = vh / gy;
+    for (let i=0; i<gx; i++) {
+      for (let j=0; j<gy; j++) {
+        const px = (i + 0.5) / gx * W;
+        const py = (j + 0.5) / gy * H;
+        const L = fieldAt(px, py, res.rows);
+        if (L < 60) continue;
+        const c = heatColor(L, 60, 100);
+        svg += `<rect x="${PAD + i*cellW}" y="${PAD + j*cellH}" width="${cellW+0.5}" height="${cellH+0.5}" fill="${c}" />`;
+      }
+    }
+
+    // ── szoba keret ──
+    svg += `<rect x="${PAD}" y="${PAD}" width="${vw}" height="${vh}" fill="none" stroke="#1A1A1A" stroke-width="1.5"/>`;
+
+    // méter háló
+    for (let i=1; i<W; i++) {
+      const x = PAD + i*s;
+      svg += `<line x1="${x}" y1="${PAD}" x2="${x}" y2="${PAD+vh}" stroke="#C9C1AF" stroke-width="0.5" opacity="0.55" stroke-dasharray="2,4"/>`;
+    }
+    for (let i=1; i<H; i++) {
+      const y = PAD + i*s;
+      svg += `<line x1="${PAD}" y1="${y}" x2="${PAD+vw}" y2="${y}" stroke="#C9C1AF" stroke-width="0.5" opacity="0.55" stroke-dasharray="2,4"/>`;
+    }
+
+    // méret feliratok
+    svg += `<text x="${PAD + vw/2}" y="${PAD - 12}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#8A847A" letter-spacing="1">W = ${W.toFixed(2)} m</text>`;
+    svg += `<text x="${PAD - 14}" y="${PAD + vh/2}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#8A847A" letter-spacing="1" transform="rotate(-90 ${PAD-14} ${PAD + vh/2})">H = ${H.toFixed(2)} m</text>`;
+
+    // ── távolság vonalak ──
+    devs.forEach((p) => {
+      const px = PAD + p.x*s, py = PAD + p.y*s;
+      svg += `<line x1="${lx}" y1="${ly}" x2="${px}" y2="${py}" stroke="#1A1A1A" stroke-width="0.6" stroke-dasharray="1,4" opacity="0.4"/>`;
+    });
+
+    // ── hallgató ──
+    svg += `<g>`;
+    svg += `<circle cx="${lx}" cy="${ly}" r="14" fill="#F5F1E6" stroke="#1A1A1A" stroke-width="1.5"/>`;
+    svg += `<circle cx="${lx}" cy="${ly}" r="4.5" fill="#1A1A1A"/>`;
+    svg += `<text x="${lx}" y="${ly - 22}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="1.2" fill="#1A1A1A" font-weight="500">HALLGATÓ</text>`;
+    svg += `</g>`;
+
+    // ── eszközök ──
+    devs.forEach((p, i) => {
+      const px = PAD + p.x*s, py = PAD + p.y*s;
+      const row = res.rows[i];
+      const isU = row.isU;
+      const fill = isU ? "#F4E2D2" : "#DDEDE3";
+      const stroke = isU ? "#C14820" : "#0F6E56";
+      const txt = isU ? "#C14820" : "#0F6E56";
+
+      // címke pozíció — alul vagy felül (a hallgatótól távolabbi oldalra)
+      const labelBelow = py < PAD + vh * 0.5;
+      const labelY = labelBelow ? py + 32 : py - 22;
+      const mode = p.dev.m.length > 24 ? p.dev.m.slice(0, 22) + "…" : p.dev.m;
+
+      svg += `<g>`;
+      svg += `<circle cx="${px}" cy="${py}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
+      svg += `<text x="${px}" y="${py + 4}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" font-weight="500" fill="${txt}">${i+1}</text>`;
+      svg += `<text x="${px}" y="${labelY}" text-anchor="middle" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A">${SHORT[p.name]}</text>`;
+      svg += `<text x="${px}" y="${labelY + 12}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="#8A847A" letter-spacing="0.5">${row.Lpred.toFixed(1)} dB · ${row.d.toFixed(2)} m</text>`;
+      svg += `</g>`;
+    });
+
+    svg += `</svg>`;
+    return svg;
+  }
+
+  // ──────── DOM FRISSÍTÉS ────────
+  function setText(id, txt) { document.getElementById(id).textContent = txt; }
+  function setHTML(id, html) { document.getElementById(id).innerHTML = html; }
+
+  function render() {
+    const root = document.body;
+    root.classList.add("regenerating");
+
+    requestAnimationFrame(() => {
+      const state = generate();
+      const res = compute(state);
+
+      // export számára eltároljuk az aktuális állapotot
+      CURRENT_STATE = state;
+      CURRENT_RESULT = res;
+
+      // meta
+      setText("m-room",    `${state.W.toFixed(2)} × ${state.H.toFixed(2)} m`);
+      setText("m-area",    `${(state.W * state.H).toFixed(1)} m²`);
+      setText("m-count",   res.rows.length);
+      setText("m-listener",`(${res.listener.x.toFixed(1)}, ${res.listener.y.toFixed(1)})`);
+
+      // stats
+      setText("s-aud", res.Laud != null ? res.Laud.toFixed(1) : "—");
+      setText("s-ult", res.Lult != null ? res.Lult.toFixed(1) : "—");
+      const hrsTxt = res.hrs == null ? "—"
+                   : res.hrs >= 100 ? res.hrs.toFixed(0)
+                   : res.hrs >= 10  ? res.hrs.toFixed(1)
+                                    : res.hrs.toFixed(2);
+      setText("s-hrs", hrsTxt);
+
+      // foot (stat under-labels)
+      let audFoot;
+      if (res.Laud == null) audFoot = "nincs hallható forrás";
+      else if (res.Laud < 70) audFoot = `<span class="tick">● biztonságos zóna</span> · &lt; 70 dB`;
+      else if (res.Laud < 85) audFoot = `<span class="warn">● figyelmeztetés</span> · 70–85 dB`;
+      else                    audFoot = `<span class="bad">● NIOSH limit fölött</span> · ≥ 85 dB`;
+      setHTML("s-aud-foot", audFoot);
+
+      // SVG
+      const host = document.getElementById("svg-host");
+      host.innerHTML = renderSVG(state, res);
+      host.firstElementChild.classList.add("fade-in");
+
+      // table
+      const tbody = document.getElementById("tbody");
+      tbody.innerHTML = res.rows.map((r, i) => {
+        const delta = r.Lpred - r.dev.L;
+        const deltaTxt = (delta >= 0 ? "+" : "") + delta.toFixed(1) + " dB";
+        return `
+          <tr class="dev-row">
+            <td>
+              <span class="idx ${r.isU ? 'ult' : 'aud'}">${i+1}</span>
+              <span class="name">${r.name}</span>
+              <span class="mode">${r.dev.m} · ${r.dev.t}</span>
+            </td>
+            <td class="r">${r.dev.L.toFixed(1)} dB</td>
+            <td class="r">${r.dev.d.toFixed(2)} m</td>
+            <td class="r">${r.d.toFixed(2)} m</td>
+            <td class="r"><span class="lpred">${r.Lpred.toFixed(1)} dB</span><span class="delta">${deltaTxt}</span></td>
+          </tr>
+        `;
+      }).join("");
+
+      setTimeout(() => root.classList.remove("regenerating"), 280);
+    });
+  }
+
+  // ──────── EXPORT FUNKCIÓK ────────
+
+  function timestamp() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  }
+
+  function downloadBlob(filename, blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(showToast._tid);
+    showToast._tid = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  function exportJSON() {
+    if (!CURRENT_STATE || !CURRENT_RESULT) return;
+    const s = CURRENT_STATE, r = CURRENT_RESULT;
+    const data = {
+      meta: {
+        generated_at: new Date().toISOString(),
+        generated_at_local: new Date().toLocaleString('hu-HU'),
+        app: "Műtő zajszint szimulátor",
+        version: "1.0",
+        model: {
+          propagation: "L = L_ref + 20·log10(d_ref / d) — első rendű szabadtéri közelítés",
+          summation: "L_tot = 10·log10(Σ 10^(Li/10)) — energikus összegzés",
+          exposure: "T = 8·2^((85 − L)/3) — NIOSH 3 dB csere"
+        }
+      },
+      room: {
+        width_m: +s.W.toFixed(3),
+        height_m: +s.H.toFixed(3),
+        area_m2: +(s.W * s.H).toFixed(3)
+      },
+      listener: {
+        x_m: +r.listener.x.toFixed(3),
+        y_m: +r.listener.y.toFixed(3)
+      },
+      aggregate: {
+        L_audible_dB: r.Laud != null ? +r.Laud.toFixed(2) : null,
+        L_ultrasound_dB: r.Lult != null ? +r.Lult.toFixed(2) : null,
+        max_exposure_hours: r.hrs != null ? +r.hrs.toFixed(3) : null,
+        active_sources: r.rows.length
+      },
+      sources: r.rows.map((row, i) => ({
+        idx: i + 1,
+        name: row.name,
+        mode: row.dev.m,
+        type: row.dev.t,
+        band: row.isU ? "ultrasound" : "audible",
+        position: { x_m: +row.x.toFixed(3), y_m: +row.y.toFixed(3) },
+        L_ref_dB: +row.dev.L.toFixed(2),
+        d_ref_m: +row.dev.d.toFixed(2),
+        distance_to_listener_m: +row.d.toFixed(3),
+        L_predicted_dB: +row.Lpred.toFixed(2),
+        delta_dB: +(row.Lpred - row.dev.L).toFixed(2)
+      }))
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    downloadBlob(`muto-szimulacio_${timestamp()}.json`, blob);
+    showToast('JSON mentve');
+  }
+
+  function exportCSV() {
+    if (!CURRENT_STATE || !CURRENT_RESULT) return;
+    const s = CURRENT_STATE, r = CURRENT_RESULT;
+
+    const escape = v => {
+      const str = String(v);
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes(';')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const headers = [
+      'idx', 'name', 'mode', 'type', 'band',
+      'x_m', 'y_m', 'L_ref_dB', 'd_ref_m',
+      'distance_to_listener_m', 'L_predicted_dB', 'delta_dB'
+    ];
+
+    const rows = r.rows.map((row, i) => [
+      i + 1,
+      row.name,
+      row.dev.m,
+      row.dev.t,
+      row.isU ? 'ultrasound' : 'audible',
+      row.x.toFixed(3),
+      row.y.toFixed(3),
+      row.dev.L.toFixed(2),
+      row.dev.d.toFixed(2),
+      row.d.toFixed(3),
+      row.Lpred.toFixed(2),
+      (row.Lpred - row.dev.L).toFixed(2)
+    ].map(escape).join(','));
+
+    const meta = [
+      `# Műtő zajszint szimuláció`,
+      `# Exportálva: ${new Date().toLocaleString('hu-HU')}`,
+      `# Szoba: ${s.W.toFixed(2)} x ${s.H.toFixed(2)} m  (${(s.W * s.H).toFixed(1)} m^2)`,
+      `# Hallgato: (${r.listener.x.toFixed(2)}, ${r.listener.y.toFixed(2)}) m`,
+      `# Hallhato zaj osszegzett: ${r.Laud != null ? r.Laud.toFixed(1) + ' dB' : '-'}`,
+      `# Ultrahang osszegzett: ${r.Lult != null ? r.Lult.toFixed(1) + ' dB' : '-'}`,
+      `# Max. expozicio: ${r.hrs != null ? r.hrs.toFixed(2) + ' ora' : '-'}`,
+      `#`
+    ].join('\n');
+
+    // BOM hozzáadása, hogy az Excel helyesen kezelje az UTF-8 ékezetes karaktereket
+    const csv = '\ufeff' + meta + '\n' + headers.join(',') + '\n' + rows.join('\n') + '\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    downloadBlob(`muto-szimulacio_${timestamp()}.csv`, blob);
+    showToast('CSV mentve');
+  }
+
+  function getSerializedSVG() {
+    const svg = document.querySelector('.room-svg');
+    if (!svg) return null;
+    const clone = svg.cloneNode(true);
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    if (!clone.getAttribute('xmlns:xlink')) clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+    // Háttér rect beillesztése elsőként, hogy SVG-megnyitóknál is paper háttér legyen
+    const vb = (clone.getAttribute('viewBox') || '').split(/\s+/).map(Number);
+    if (vb.length === 4) {
+      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bg.setAttribute('x', vb[0]);
+      bg.setAttribute('y', vb[1]);
+      bg.setAttribute('width', vb[2]);
+      bg.setAttribute('height', vb[3]);
+      bg.setAttribute('fill', '#EDE8D9');
+      clone.insertBefore(bg, clone.firstChild);
+    }
+    return { svg: clone, viewBox: vb };
+  }
+
+  function exportSVG() {
+    const obj = getSerializedSVG();
+    if (!obj) return;
+    const serialized = new XMLSerializer().serializeToString(obj.svg);
+    const out = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' + serialized;
+    const blob = new Blob([out], { type: 'image/svg+xml;charset=utf-8' });
+    downloadBlob(`muto-terkep_${timestamp()}.svg`, blob);
+    showToast('SVG mentve');
+  }
+
+  function exportPNG() {
+    const obj = getSerializedSVG();
+    if (!obj) return;
+    const vb = obj.viewBox;
+    if (vb.length !== 4) { showToast('Hiba: hiányzó viewBox'); return; }
+
+    const scale = 2; // retina minőség
+    const w = Math.round(vb[2] * scale);
+    const h = Math.round(vb[3] * scale);
+
+    const serialized = new XMLSerializer().serializeToString(obj.svg);
+    const svgBlob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#EDE8D9';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+
+      canvas.toBlob(blob => {
+        if (!blob) { showToast('PNG hiba'); return; }
+        downloadBlob(`muto-terkep_${timestamp()}.png`, blob);
+        showToast('PNG mentve');
+      }, 'image/png');
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      showToast('PNG renderelési hiba');
+    };
+    img.src = url;
+  }
+
+  // ──────── EXPORT MENÜ KEZELÉS ────────
+  const exportBtn = document.getElementById('export-btn');
+  const exportMenu = document.getElementById('export-menu');
+
+  function setMenuOpen(open) {
+    exportMenu.classList.toggle('open', open);
+    exportBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  exportBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    setMenuOpen(!exportMenu.classList.contains('open'));
+  });
+
+  document.addEventListener('click', e => {
+    if (!exportMenu.contains(e.target) && e.target !== exportBtn) {
+      setMenuOpen(false);
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') setMenuOpen(false);
+  });
+
+  exportMenu.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-format]');
+    if (!btn) return;
+    const fmt = btn.dataset.format;
+    setMenuOpen(false);
+    if (fmt === 'json') exportJSON();
+    else if (fmt === 'csv') exportCSV();
+    else if (fmt === 'svg') exportSVG();
+    else if (fmt === 'png') exportPNG();
+  });
+
+  document.getElementById("regen").addEventListener("click", render);
+
+  // Space bar → új szimuláció (demo kényelem)
+  document.addEventListener("keydown", e => {
+    if (e.code === "Space" && e.target.tagName !== "INPUT") {
+      e.preventDefault();
+      render();
+    }
+  });
+
+  render();
+})();
+</script>
+
+</body>
+</html>
