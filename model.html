@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+
+  <link rel="stylesheet" href="https://pyscript.net/releases/2026.3.1/core.css">
+  <script type="module" src="https://pyscript.net/releases/2026.3.1/core.js"></script>
+
+  <style>
+    #df_preview, #output {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: #ffffff;
+      border: 1px solid #e6e8eb;
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin: 16px 0;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+    }
+
+    #output div {
+      padding: 6px 0;
+      font-size: 15px;
+      color: #2b2f33;
+    }
+
+    #output div:not(:last-child) {
+      border-bottom: 1px solid #f0f2f5;
+    }
+
+    #df_preview {
+      overflow-x: auto;
+    }
+
+    #df_preview table.dataframe {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      color: #2b2f33;
+    }
+
+    #df_preview thead th {
+      background: #6887b7;
+      text-align: left;
+      padding: 10px 12px;
+      font-weight: 600;
+      border-bottom: 2px solid #e6e8eb;
+      white-space: nowrap;
+    }
+
+    #df_preview tbody td,
+    #df_preview tbody th {
+      padding: 10px 12px;
+      border-bottom: 1px solid #eef1f4;
+      vertical-align: middle;
+    }
+
+    #df_preview tbody tr:hover {
+      background: #f5faff;
+      transition: background 0.2s ease;
+    }
+
+    #df_preview tbody th {
+      color: #6b7280;
+      font-weight: 500;
+    }
+
+    #df_preview td:contains("NaN") {
+      color: #9aa3ad;
+    }
+  </style>
+</head>
+
+<body>
+  <input type="file" id="fileInput" />
+  
+  <div id="output"></div>
+  <div id="df_preview"></div>
+
+  <py-config>
+    packages = ["numpy", "pandas", "openpyxl"]
+  </py-config>
+
+  <py-script>
+    import pandas as pd
+    import numpy as np
+    import io
+    import asyncio
+    from js import document
+    from pyodide.ffi import create_proxy
+    from pyscript import display
+
+    output = document.getElementById("output")
+    df_preview = document.getElementById("df_preview")
+
+    async def load_excel(event):
+        file = event.target.files.item(0)
+        if file is None:
+            return
+
+        array_buffer = await file.arrayBuffer()
+        data = bytes(array_buffer.to_py())
+
+        df = pd.read_excel(io.BytesIO(data), sheet_name="Scenario_Model", skiprows=9, nrows=20)
+
+        df = df[["Active", "Device", "Measurement_type", "L_ref", "Unit", "d_ref_m", "d_target_m", "alpha_dB_per_m", "L_pred_target"]]
+        df = df[df['Active'] == 1]
+
+        # Segédfüggvények
+        def predict_level(row):
+            if not row["Active"]:
+                return 0
+            
+            L_ref = row["L_ref"]
+            d_ref = row["d_ref_m"]
+            d_target = row["d_target_m"]
+            alpha = row["alpha_dB_per_m"]
+            
+            if pd.isna(L_ref) or pd.isna(d_ref) or pd.isna(d_target):
+                return np.nan
+            
+            distance_loss = 20 * np.log10(d_target / d_ref)
+            air_loss = alpha * (d_target - d_ref)
+            
+            return L_ref - distance_loss - air_loss
+
+
+        def energy_from_db(L):
+            if pd.isna(L):
+                return np.nan
+            return 10 ** (L / 10)
+
+
+        def allowable_hours(L):
+            if pd.isna(L):
+                return np.nan
+            return 8 * (2 ** ((85 - L) / 3))
+
+
+        def is_audible(mt):
+            return "audible" in str(mt).lower()
+
+
+        def is_ultrasound(mt):
+            return "ultrasound" in str(mt).lower()
+
+
+        # Céloszlopok
+        df["L_pred_target"] = df.apply(predict_level, axis=1)
+
+        df["Energy_audible"] = df.apply(
+            lambda row: energy_from_db(row["L_pred_target"])
+            if is_audible(row["Measurement_type"]) else 0,
+            axis=1
+        )
+
+        df["Energy_ultrasound"] = df.apply(
+            lambda row: energy_from_db(row["L_pred_target"])
+            if is_ultrasound(row["Measurement_type"]) else 0,
+            axis=1
+        )
+
+        df["Allowable_hours_if_audible"] = df.apply(
+            lambda row: allowable_hours(row["L_pred_target"])
+            if is_audible(row["Measurement_type"]) else np.nan,
+            axis=1
+        )
+
+        # Kombinált kitettség
+        def combine_energy(energy_series):
+            total_energy = energy_series.sum()
+            if total_energy <= 0:
+                return np.nan
+            return 10 * np.log10(total_energy)
+
+        total_audible_L = combine_energy(df["Energy_audible"])
+        total_ultrasound_L = combine_energy(df["Energy_ultrasound"])
+
+
+        # Soronkénti kategorizálás
+        def classify_noise(row):
+            mt = str(row["Measurement_type"]).lower()
+            L = row["L_pred_target"]
+            
+            if pd.isna(L):
+                return "No data"
+            if "ultrasound" in mt:
+                return "Ultrasound (separate standard required)"
+            if L < 70:
+                return "Safe (No risk for long exposure)"
+            elif L < 80:
+                return "Generally safe (Very low risk)"
+            elif L < 85:
+                return "Moderately safe (Monitor exposure)"
+            elif L < 90:
+                return "Risky (hearing protection recommended)"
+            elif L < 100:
+                return "Harmful (Exposure time must be limited)"
+            else:
+                return "Dangerous (Rapid hearing damage possible)"
+
+        df["Noise_category"] = df.apply(classify_noise, axis=1)
+
+        #print("Total audible level:", total_audible_L)
+        #print("Total ultrasound level:", total_ultrasound_L)
+        #print("Allowable hours (total audible):", allowable_hours(total_audible_L))
+        #df = df[['L_pred_target', 'Energy_audible', 'Energy_ultrasound', 'Allowable_hours_if_audible', 'Noise_category']]
+
+        display(f"Total audible level: {round(total_audible_L, 2)}", target="output")
+        display(f"Total ultrasound level: {round(total_ultrasound_L, 2)}", target="output")
+        display(f"Allowable hours (total audible): {round(allowable_hours(total_audible_L), 2)}", target="output")
+
+        df_preview.innerHTML = ""
+        display(df, target="df_preview")
+
+    file_input = document.getElementById("fileInput")
+    file_input.addEventListener("change", create_proxy(load_excel))
+  </py-script>
+</body>
+</html>
